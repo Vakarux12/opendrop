@@ -82,9 +82,29 @@ $ opendrop send -r 0 -f <<DISCLAIMER: The former owlink website is no longer ass
 
 ### Receiving Files
 
-Receiving is much easier. Simply use the `receive` command. OpenDrop will accept all incoming files automatically and put received files in the current directory.
+Receiving is much easier. Simply use the `receive` command. Received files are put in the current directory.
 ```
 $ opendrop receive
+```
+On Linux with `notify-send` (e.g. KDE Plasma), incoming transfers show an
+Accept/Decline notification instead of auto-accepting. Expire, close or
+Decline rejects the transfer. Use `-y/--auto-accept` to restore the old
+always-accept behavior (e.g. headless servers). Use `-i` to pick the
+interface (e.g. `-i wlan0` keeps your normal Wi-Fi and internet working,
+no OWL/AWDL needed for OpenDrop-to-OpenDrop transfers).
+
+### Always discoverable in the background (systemd)
+
+To stay discoverable like macOS AirDrop, enable the provided user service
+(receives into `~/Downloads`, prompts via notification):
+```
+cp systemd/opendrop-receive.service ~/.config/systemd/user/
+systemctl --user daemon-reload
+systemctl --user enable --now opendrop-receive.service
+```
+Edit the interface/computer name if needed:
+```
+systemctl --user edit opendrop-receive.service
 ```
 
 

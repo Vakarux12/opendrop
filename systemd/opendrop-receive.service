@@ -1,0 +1,14 @@
+[Unit]
+Description=OpenDrop AirDrop receiver (always discoverable)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/opendrop receive -i wlan0 -n %H
+WorkingDirectory=%h/Downloads
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=default.target
