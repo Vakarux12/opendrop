@@ -98,9 +98,16 @@ grep -q "Announcing service" $OD_LOG && tail -n 2 $OD_LOG || { echo "opendrop fa
 
 echo ""
 echo "***** DISCOVERABLE as '$NAME' for $WINDOW s *****"
+echo "(sniffing $MON_IF for RX proof...)"
+sudo -n timeout "$WINDOW" tcpdump -i $MON_IF -w /tmp/awdl-cap.pcap >/tmp/awdl-tcpdump.log 2>&1 &
+TCPDUMP_PID=$!
 for i in $(seq "$WINDOW" -1 1); do echo -n "$i... "; sleep 1; done
 echo ""
+wait $TCPDUMP_PID 2>/dev/null
 echo "== end-of-window state =="
+sudo -n tcpdump -r /tmp/awdl-cap.pcap 2>/dev/null | wc -l | xargs echo "frames captured:"
+sudo -n tcpdump -r /tmp/awdl-cap.pcap 2>/dev/null | grep -i -c "beacon" | xargs echo "beacons:"
+sudo -n tcpdump -r /tmp/awdl-cap.pcap -n 2>/dev/null | grep -vi -E "beacon|probe" | head -n 10
 ip -6 neigh show dev awdl0 2>&1 || true
 grep -i -E "peer|master|sync|tx|error" $OWL_LOG 2>/dev/null | tail -n 15 || true
 grep -i -E "discover|ask|upload" $OD_LOG 2>/dev/null | tail -n 5 || true
