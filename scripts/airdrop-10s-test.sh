@@ -3,7 +3,7 @@
 set -u
 
 NAME="ArchLinux"       # name iPhones will see
-WINDOW=10              # discoverable seconds (use 120 for real hunting)
+WINDOW=${WINDOW:-10}   # discoverable seconds (env override, e.g. WINDOW=60)
 AP_IF=wlan0
 MON_IF=awdlmon0
 OWL_BIN=/usr/local/bin/owl   # fork build with -m MAC override
@@ -68,8 +68,8 @@ wait_awdl0() {
   return 1
 }
 
-echo "== OWL attempt 1: -N -m $OWL_MAC -i $MON_IF =="
-sudo -n $OWL_BIN -N -m "$OWL_MAC" -i $MON_IF >$OWL_LOG 2>&1 &
+echo "== OWL attempt 1: -N -m $OWL_MAC -i $MON_IF ${OWL_EXTRA:-} =="
+sudo -n $OWL_BIN -N -m "$OWL_MAC" ${OWL_EXTRA:-} -i $MON_IF >$OWL_LOG 2>&1 &
 OWL_PID=$!
 if wait_awdl0; then
   echo "awdl0 via $MON_IF"
@@ -100,4 +100,8 @@ echo ""
 echo "***** DISCOVERABLE as '$NAME' for $WINDOW s *****"
 for i in $(seq "$WINDOW" -1 1); do echo -n "$i... "; sleep 1; done
 echo ""
+echo "== end-of-window state =="
+ip -6 neigh show dev awdl0 2>&1 || true
+grep -i -E "peer|master|sync|tx|error" $OWL_LOG 2>/dev/null | tail -n 15 || true
+grep -i -E "discover|ask|upload" $OD_LOG 2>/dev/null | tail -n 5 || true
 echo "done."
