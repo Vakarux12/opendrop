@@ -10,6 +10,19 @@ BACKUP_DIR="${BACKUP_DIR:-$HOME/.local/share/bcm4364-wifi-backup}"
 FW_DIR="/lib/firmware/brcm"
 GATEWAY="$(ip route show default 2>/dev/null | awk '{print $3}' | head -n1)"
 
+# Ensure sudo stays valid for the whole run. Prefers cached timestamp;
+# falls back to $SUDO_PASS (e.g. SUDO_PASS=lol ./restore-wifi.sh).
+sudo_unlock() {
+    sudo -n true 2>/dev/null && return 0
+    [[ -n "${SUDO_PASS:-}" ]] || { echo "need sudo (timestamp expired and no SUDO_PASS)"; return 1; }
+    echo "$SUDO_PASS" | sudo -S -v 2>/dev/null
+}
+sudo_unlock || exit 1
+# keep-alive: refresh timestamp while the script runs
+( while kill -0 $$ 2>/dev/null; do sleep 50; sudo -n -v 2>/dev/null || break; done ) &
+KEEPALIVE_PID=$!
+trap 'kill $KEEPALIVE_PID 2>/dev/null' EXIT
+
 if [[ "${1:-}" == "--check" ]]; then
     echo "== backup integrity =="
     [[ -d "$BACKUP_DIR" ]] || { echo "MISSING backup dir: $BACKUP_DIR"; exit 1; }
@@ -33,7 +46,11 @@ echo "[2/5] verifying checksums..."
 (cd "$FW_DIR" && sudo sha256sum -c "$BACKUP_DIR/SHA256SUMS") | tail -n 2
 
 echo "[3/5] reloading driver (Wi-Fi will drop for ~10-30s)..."
-sudo modprobe -r brcmfmac brcmutil 2>/dev/null || sudo modprobe -r brcmfmac || true
+sudo ip link set wlan0 down 2>/dev/null || true
+sleep 1
+sudo modprobe -r brcmfmac_wcc brcmfmac_bca brcmfmac_cyw brcmfmac brcmutil 2>/dev/null \
+  || sudo modprobe -r brcmfmac 2>/dev/null \
+  || { echo "WARN: module still in use, forcing interface down and retrying..."; sudo ip link set wlan0 down; sleep 2; sudo modprobe -r brcmfmac; }
 sleep 2
 sudo modprobe brcmfmac
 sleep 3
