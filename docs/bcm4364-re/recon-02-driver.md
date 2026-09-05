@@ -61,3 +61,16 @@ driver sends. That is testable **without flashing firmware**.
 - `restore-wifi.sh` live run (password prompt, drops Wi-Fi ~30s)
 - build deps (`base-devel` etc.), module build/install, `iw`/`mon0` tests,
   debugfs read of `brcmfmac` features (`/sys/kernel/debug/...`, root-only)
+
+## 6. Live results (2026-09-05, patched module loaded, srcversion verified)
+
+- `iw list` shows `monitor` after forcing
+  `MONITOR|MONITOR_FLAG|MONITOR_FMT_RADIOTAP` quirk for `01-c06f991b`.
+- `mon0` creates fine; `SET_MONITOR` rejected (-52) for values 3/1/2 while
+  `wlan0` managed+associated. `monitor_promisc_level=1` accepted.
+- **With `wlan0` DOWN, `mon0` came UP**: `SET_MONITOR=3` accepted
+  ("monitor enabled with value 3"). Lesson: FW 9.30.503 allows monitor only
+  when the primary is down — no concurrent managed+monitor (same limitation
+  OWL documents: AWDL needs the radio dedicated).
+- Accidentally left `wlan0` down during the test; recovered via NM restart.
+  Note for future tests: schedule radio-down windows with the user.
