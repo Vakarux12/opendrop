@@ -21,7 +21,9 @@ import json
 import logging
 import platform
 import plistlib
+import shutil
 import socket
+import subprocess
 import time
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
@@ -227,6 +229,27 @@ class AirDropServerHandler(BaseHTTPRequestHandler):
 
         AirDropUtil.write_debug(self.config, post_data, "receive_ask_request.plist")
 
+        try:
+            ask_req = plistlib.loads(post_data)
+        except Exception:  # invalid plist -> decline
+            ask_req = {}
+        sender = ask_req.get("SenderComputerName", "Unknown sender")
+        items = []
+        for f in ask_req.get("Files", []):
+            if isinstance(f, dict):
+                items.append(f.get("FileName", "?"))
+        for u in ask_req.get("Items", []):
+            items.append(str(u))
+
+        if not self.config.auto_accept:
+            if not self.prompt_user_accept(sender, items):
+                logger.info(f"Declined file(s) from {sender}")
+                self.send_response(403)  # client treats any non-200 as declined
+                self.send_header("Content-Length", 0)
+                self.send_header("Connection", "close")
+                self.end_headers()
+                return
+
         ask_response = {
             "ReceiverModelName": self.config.computer_model,
             "ReceiverComputerName": self.config.computer_name,
@@ -241,6 +264,52 @@ class AirDropServerHandler(BaseHTTPRequestHandler):
 
         self._set_response(len(ask_resp_binary))
         self.wfile.write(ask_resp_binary)
+
+    def prompt_user_accept(self, sender, items):
+        """Show a KDE notification with Accept/Decline buttons.
+
+        Returns True only if the user explicitly clicks Accept.
+        Expire, close, Decline, errors and timeouts all mean decline
+        (safe default). If no notification daemon is available
+        (headless), fall back to auto-accept to preserve old behavior.
+        """
+        detail = ", ".join(items[:5])
+        if len(items) > 5:
+            detail += f" (+{len(items) - 5} more)"
+        if not detail:
+            detail = "incoming file"
+        timeout_ms = int(getattr(self.config, "prompt_timeout", 30)) * 1000
+
+        if shutil.which("notify-send") is None:
+            logger.warning("notify-send not found, auto-accepting")
+            return True
+        try:
+            proc = subprocess.run(
+                [
+                    "notify-send",
+                    "-a", "OpenDrop",
+                    "-u", "critical",
+                    "-t", str(timeout_ms),
+                    "-A", "accept=Accept",
+                    "-A", "decline=Decline",
+                    f"AirDrop from {sender}",
+                    detail,
+                ],
+                capture_output=True,
+                text=True,
+                timeout=getattr(self.config, "prompt_timeout", 30) + 5,
+            )
+        except FileNotFoundError:
+            logger.warning("notify-send not found, auto-accepting")
+            return True
+        except subprocess.TimeoutExpired:
+            logger.info("Accept prompt timed out, declining")
+            return False
+        except Exception as e:  # e.g. no D-Bus session
+            logger.warning(f"Notification failed ({e}), auto-accepting")
+            return True
+        action = (proc.stdout or "").strip()
+        return action == "accept"
 
     def handle_upload(self):
         if self.headers.get("content-type", "").lower() != "application/x-cpio":
@@ -308,6 +377,20 @@ class AirDropServerHandler(BaseHTTPRequestHandler):
         logger.info(
             f"File(s) received (size {transferred:.02f} MB, speed {speed:.02f} MB/s)"
         )
+        try:
+            if shutil.which("notify-send") is not None:
+                subprocess.Popen(
+                    [
+                        "notify-send",
+                        "-a", "OpenDrop",
+                        "AirDrop received",
+                        f"File(s) received ({transferred:.02f} MB)",
+                    ],
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                )
+        except Exception:
+            pass
 
         self.send_response(200)
         self.send_header("Content-Length", 0)

@@ -71,6 +71,8 @@ class AirDropConfig:
         phone=None,
         debug=False,
         interface=None,
+        auto_accept=False,
+        prompt_timeout=30,
     ):
         self.airdrop_dir = os.path.expanduser(airdrop_dir)
 
@@ -104,6 +106,9 @@ class AirDropConfig:
         if phone is None:
             phone = []
         self.phone = phone
+
+        self.auto_accept = auto_accept
+        self.prompt_timeout = prompt_timeout
 
         # Bare minimum, we currently do not support anything else
         self.flags = (

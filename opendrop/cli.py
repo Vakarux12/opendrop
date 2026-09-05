@@ -67,6 +67,12 @@ class AirDropCli:
         parser.add_argument(
             "-i", "--interface", help="Which AWDL interface to use", default="awdl0"
         )
+        parser.add_argument(
+            "-y",
+            "--auto-accept",
+            help="Automatically accept incoming files without prompting",
+            action="store_true",
+        )
         args = parser.parse_args(args)
 
         if args.debug:
@@ -86,6 +92,7 @@ class AirDropCli:
             computer_model=args.model,
             debug=args.debug,
             interface=args.interface,
+            auto_accept=args.auto_accept,
         )
         self.server = None
         self.client = None
